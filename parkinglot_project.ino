@@ -64,6 +64,7 @@ void close_gate() // inchide bariera de la intrare
 {
     digitalWrite(GLED, LOW);
     digitalWrite(RLED, HIGH); // opreste led rosu - masinile nu pot accesa
+    print_message("INCHIDERE BARIERA");
     for(int position=90; position >= 0; position--)
     {
         myservo.write(position);
@@ -105,7 +106,7 @@ void print_message(char* message) // functie afisare mesaj pe ecran LCD
 
 void car_access() // functie principala acces masini - sosire in parcare
 {
-    if(detect_car(TRIG_SENS1, ECHO_SENS1))
+    if(detect_car(TRIG_SENS1, ECHO_SENS1) && !detect_car(TRIG_SENS2, ECHO_SENS2))
     {
         if(space)
         {
@@ -134,6 +135,30 @@ void car_access() // functie principala acces masini - sosire in parcare
     }
 }
 
+void car_leaving()
+{
+    if(!detect_car(TRIG_SENS1, ECHO_SENS1) && detect_car(TRIG_SENS2, ECHO_SENS2))
+    {
+        print_message("LA REVEDERE");
+        open_gate();
+        while(1)
+        {
+            if(!detect_car(TRIG_SENS1, ECHO_SENS1) && !detect_car(TRIG_SENS2, ECHO_SENS2))
+            {
+              break;
+            }
+            //
+            // ------------------------
+            // - tratare cazuri de deschidere sau alarma in caz de depasire numar masini & stuff
+            //
+
+        }
+        close_gate();
+        space++;
+        print_remaining_spots();
+    }
+}
+
 void setup() 
 {
     pinMode(RLED, OUTPUT);
@@ -145,6 +170,7 @@ void setup()
     pinMode(ECHO_SENS2, INPUT);
 
     myservo.attach(MOTOR); // pornirea motorasului
+    myservo.write(0);
 
     Serial.begin(9600);
 
@@ -159,4 +185,5 @@ void loop()
 {
     car_access();
     delay(300);
+    car_leaving();
 }
