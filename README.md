@@ -18,4 +18,3 @@ Gate Control: Upon detecting an approaching vehicle at the entry point, the gate
 Parking Management: The system keeps track of available parking spots. If spots are available, the gate opens; otherwise, it displays a message indicating insufficient space.
 Real-time Feedback: Status messages and available parking spot information are displayed on the LCD screen for user convenience.
 
-SIMULATION: https://wokwi.com/projects/394498647535481857
