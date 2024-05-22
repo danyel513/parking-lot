@@ -10,6 +10,7 @@ Vehicle Detection: Ultrasonic sensors placed strategically at entry and exit poi
 Dynamic Gate Control: The servo motor-controlled gate opens automatically upon detecting an approaching vehicle, granting access to the parking area, and closes after the vehicle passes through.
 Real-time Display: Utilizes an LCD screen to provide real-time information, including the number of available parking spots and status messages.
 Status Indication: LED indicators provide visual feedback, signaling the system's operational status. A red LED indicates standby mode, while a green LED signifies active operation.
+RFID card reader: he system enters automatically in "admin mode" if an admin card is presented at the RF reader module. The gate will now be open all the time and the administrator can adjust te parking spots number.
 
 How It Works
 
