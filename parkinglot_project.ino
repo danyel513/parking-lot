@@ -3,8 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include<IRremote.hpp>
-#include <Arduino.h>
-
 // definire pini
 
 #define RLED 2  // leduri pentru semnalizarea functionarii motorului
@@ -80,7 +78,7 @@ void open_gate() // deschide bariera de la intrare
     digitalWrite(GLED, HIGH); // porneste becul verde - acces masini
     myservo.attach(MOTOR); // porneste motorasul 
     myservo.write(85);
-    delay(685);
+    delay(675);
     myservo.detach();
 }
 
@@ -91,7 +89,7 @@ void close_gate() // inchide bariera de la intrare
     digitalWrite(RLED, HIGH); // opreste led rosu - masinile nu pot accesa
     myservo.attach(MOTOR); // invarte motoras
     myservo.write(100);
-    delay(585);
+    delay(583);
     myservo.detach();  
 }
 
@@ -132,7 +130,7 @@ int check_overpassing(int TRIG1, int ECHO1, int TRIG2, int ECHO2)
     {
         if(!detect_car(TRIG1, ECHO1))
         {
-            delay(10);
+            delay(1000);
             if(detect_car(TRIG1, ECHO1))
             {
                 Serial.println("Overpass detectat!");
@@ -162,12 +160,14 @@ void car_access() // functie principala acces masini - sosire in parcare
               // pornire alarma in caz de overpassing
               if(check_overpassing(TRIG_SENS1, ECHO_SENS1, TRIG_SENS2, ECHO_SENS2))
               {
-                digitalWrite(BUZZER, HIGH);
+                tone(BUZZER, 1000);;
                 while(1)
                 {
+                    char message45[25]="ASTEPTATI FINALIZAREA";
+                    print_message(message45);
                     if(!detect_car(TRIG_SENS1, ECHO_SENS1))
                     {
-                        digitalWrite(BUZZER, LOW);
+                        noTone(BUZZER);
                         break;
                     }
                 }
@@ -353,10 +353,11 @@ void setup()
     pinMode(BUZZER, OUTPUT);  // setare pin de output 
 
     Serial.begin(9600);
-    IrReceiver.begin(A3, ENABLE_LED_FEEDBACK);
+    IrReceiver.begin(A3, 0);
 
     space = INITIAL_SPACE;
     digitalWrite(RLED, HIGH); // activare bec rosu
+    print_remaining_spots();
 }
 
 void loop() 
