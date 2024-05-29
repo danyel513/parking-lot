@@ -2,41 +2,46 @@
 #include <Servo.h>
 #include <stdlib.h>
 #include <string.h>
-#include <MFRC522.h>
+#include<IRremote.hpp>
+#include <Arduino.h>
 
 // definire pini
 
-#define RLED 13  // leduri pentru semnalizarea functionarii motorului
-#define GLED 12
+#define RLED 2  // leduri pentru semnalizarea functionarii motorului
+#define GLED 3
 // obs: led rosu aprins cand motorul este in standby si red verde aprins cand motorul functioneaza
 
-#define TRIG_SENS2 11  // senzor ultrasonic amplasat dupa motor
-#define ECHO_SENS2 10
+#define TRIG_SENS2 4  // senzor ultrasonic amplasat dupa motor
+#define ECHO_SENS2 A4
 
-#define TRIG_SENS1 9  // senzor ultrasonic amplasat inainte de motor
-#define ECHO_SENS1 8  
+#define TRIG_SENS1 5  // senzor ultrasonic amplasat inainte de motor
+#define ECHO_SENS1 A5  
 
 #define MOTOR 6 // activare motor
 
-#define BUZZER 7 // buzzer
-
-#define SDA_PIN 5 // RFID module
-#define RST_PIN 4
+#define BUZZER 13 // buzzer
 
 // DATE INITIALE
 
-LiquidCrystal lcd(A0, A1, A2, A3, A4, A5);  // setam pinurile ecranului
+long readIRValue;
+
+long INCREASE_PARKING_LOTS = 3927310080;
+long DECREASE_PARKING_LOTS = 4161273600;
+long ENABLE_MODE = 4127850240;
+long PASS1 = 4077715200;
+long PASS2 = 3877175040;
+long PASS3 = 2707357440;
+long PASS4 = 4144561920;
+long PASS = 3158572800;
+
+LiquidCrystal lcd(11, 12, 10, 9, 8, 7);  // setam pinurile ecranului
+
+Servo myservo;
 
 int space; // spariu disponibil in parcare (nr locuri de parcare)
 
-Servo myservo;  // variabila de stare a motorului
-
-MFRC522 rfid(SDA_PIN, RST_PIN); // variabila de stare a modului RFID
-
-const byte authorizedUID[4] = {0xDE, 0xAD, 0xBE, 0xEF}; // salvez in array bitii cardului de acces al administratorului
-
-#define MAX_DISTANCE 100 // distanta admisa pentru a nu detecta o masina
-#define INITIAL_SPACE 10 // locuri de parcare
+#define MAX_DISTANCE 5 // distanta admisa pentru a nu detecta o masina
+int INITIAL_SPACE = 10; // locuri de parcare
 
 // functii
 
@@ -49,7 +54,14 @@ int read_distance(int trigPin, int outPin) // citire senzor ultrasonic
     delayMicroseconds(20);
     digitalWrite(trigPin, LOW);
 
-    return pulseIn(outPin, HIGH) / 58; // returnam distanta in cm
+    int result = pulseIn(outPin, HIGH) / 58;
+
+    Serial.print("Distanta: ");
+    Serial.print(trigPin);
+    Serial.print(" - ");
+    Serial.print(result);
+    Serial.println();
+    return result; // returnam distanta in cm
 }
 
 int detect_car(int trigSens, int echoSens) // detecteaza prezenta unei masini
@@ -66,26 +78,21 @@ void open_gate() // deschide bariera de la intrare
     Serial.println("Activare motor pentru deschidere bariera.");
     digitalWrite(RLED, LOW);
     digitalWrite(GLED, HIGH); // porneste becul verde - acces masini
-    for(int position=0; position <= 90; position++)
-    {
-        myservo.write(position); // ridica bariera vertical (90grade)
-        delay(15);
-    }
+    myservo.attach(MOTOR); // porneste motorasul 
+    myservo.write(85);
+    delay(685);
+    myservo.detach();
 }
 
 void close_gate() // inchide bariera de la intrare
 {
-  Serial.println("Activare motor pentru inchidere bariera.");
+    Serial.println("Activare motor pentru inchidere bariera.");
     digitalWrite(GLED, LOW);
     digitalWrite(RLED, HIGH); // opreste led rosu - masinile nu pot accesa
-    char message[25] = "INCHIDERE BARIERA";
-    print_message(message);
-    for(int position=90; position >= 0; position--)
-    {
-        myservo.write(position);
-        delay(15);
-    }
-    
+    myservo.attach(MOTOR); // invarte motoras
+    myservo.write(100);
+    delay(585);
+    myservo.detach();  
 }
 
 void print_remaining_spots() // functie afisare locuri de parcare disponibile
@@ -145,6 +152,7 @@ void car_access() // functie principala acces masini - sosire in parcare
             char message[25] = "BUN VENIT";
             print_message(message);
             open_gate();
+            delay(50);
             while(1)
             {
               if(!detect_car(TRIG_SENS1, ECHO_SENS1) && !detect_car(TRIG_SENS2, ECHO_SENS2))
@@ -166,6 +174,7 @@ void car_access() // functie principala acces masini - sosire in parcare
               }
             }
             close_gate();
+            delay(50);
             space--;
             print_remaining_spots();
         }
@@ -193,59 +202,146 @@ void car_leaving()
             }
         }
         close_gate();
-        if(space < 10) space++;
+        if(space < INITIAL_SPACE) space++;
         print_remaining_spots();
     }
 }
 
-void print_hex_code_card()
+int verify_pass()
 {
-    Serial.print("UID: ");
-    for(byte i = 0; i < rfid.uid.size; i++) {
-        Serial.print(rfid.uid.uidByte[i] < 0x10 ? " 0" : " ");
-        Serial.print(rfid.uid.uidByte[i], HEX);
-    }
-    Serial.println();
-}
-
-void enter_admin_mode() 
-{
-    lcd.noDisplay();
-    open_gate();
-    while(1) 
+    int i=0;
+    long code[4];
+    while(1)
     {
-        // Rămâne în modul admin până la resetare
-    }
-}
-
-bool check_card() 
-{
-    if(!rfid.PICC_IsNewCardPresent()) // verificare prezenta card
-    {
-        return false;
-    }
-
-    if(!rfid.PICC_ReadCardSerial()) // citire card
-    {
-        return false;
-    }
-
-    print_hex_code_card();
-
-    for(byte i = 0; i < 4; i++) 
-    {
-        if(rfid.uid.uidByte[i] != authorizedUID[i]) 
+      IrReceiver.resume();
+      if(IrReceiver.decode())
+      {
+        if(IrReceiver.decodedIRData.decodedRawData == 0)
         {
-            return false;
+          continue;
         }
+        else
+        {
+          if(i == 0)
+          {
+            char mes[25] = "PAROLA: *___";
+            print_message(mes);
+          }
+          if(i == 1)
+          {
+            char mes[25] = "PAROLA: **__";
+            print_message(mes);
+          }
+          if(i == 2)
+          {
+            char mes[25] = "PAROLA: ***_";
+            print_message(mes);
+          }
+          if(i == 3)
+          {
+            char mes[25] = "PAROLA: ****";
+            print_message(mes);
+          }
+          Serial.println(IrReceiver.decodedIRData.decodedRawData);
+          code[i] = IrReceiver.decodedIRData.decodedRawData;
+          i++;
+          if(i == 4) break;
+        }
+      } 
     }
+    if ((code[0] == PASS1) && (code[1] == PASS2) && (code[2] == PASS3) && (code[3] == PASS4))
+    {
+      char mes2[25] = "PAROLA CORECTA";
+      print_message(mes2);
+      return 1;
+    }
+    else
+    {
+      char mes2[25] = "PAROLA INCORECTA";
+      print_message(mes2);
+      return 0;
+    }
+}
 
-    rfid.PICC_HaltA(); // oprire comunicare card
-    return true;
+void edit_spots()
+{
+  while(1)
+  {
+      IrReceiver.resume();
+      if(IrReceiver.decode())
+      {
+        if(IrReceiver.decodedIRData.decodedRawData == INCREASE_PARKING_LOTS)
+        {
+          if(space == INITIAL_SPACE)
+          { 
+            space++;
+            INITIAL_SPACE++;
+          }
+          else
+          {
+            space++;
+          }
+          print_remaining_spots();
+        }
+        
+        if(IrReceiver.decodedIRData.decodedRawData == DECREASE_PARKING_LOTS)
+        {
+          space--;
+          print_remaining_spots();
+        }
+
+        if(IrReceiver.decodedIRData.decodedRawData == ENABLE_MODE)
+        {
+          break;
+        }
+      }
+  }
+  return;
+}
+
+void enable_admin()
+{
+    lcd.clear();
+    char message[25] = "ADMIN MODE";
+    print_message(message);
+    open_gate();
+    delay(4000);
+    lcd.clear();
+    digitalWrite(GLED, LOW);
+    while(1)
+    {
+       IrReceiver.resume();
+       if(IrReceiver.decode())
+       {
+          if(IrReceiver.decodedIRData.decodedRawData == ENABLE_MODE)
+          {
+            break;
+          }
+          if(IrReceiver.decodedIRData.decodedRawData == PASS)
+          {
+            char mes[25] = "PAROLA: ____";
+            print_message(mes);
+            if(verify_pass())
+            {
+              print_remaining_spots();
+              edit_spots();
+            }
+          }
+       }
+    }
+    char message2[25] = "ADMIN MODE OFF";
+    print_message(message2);
+    close_gate();
+    delay(1000);
+    print_remaining_spots();
 }
 
 void setup() 
 {
+    lcd.begin(16, 2);     // APRINDERE ECRAN
+    char message[25] = "INITIALIZARE";
+    print_message(message); // AFISARE MESAJ INITIAL
+    
     pinMode(RLED, OUTPUT);
     pinMode(GLED, OUTPUT); //iesirea arduino intrarea de aprindere a becului
 
@@ -256,25 +352,26 @@ void setup()
 
     pinMode(BUZZER, OUTPUT);  // setare pin de output 
 
-    myservo.attach(MOTOR); // pornirea motorasului
-    myservo.write(0);
-
     Serial.begin(9600);
-
-    SPI.begin(); // initializare modul RF
-    rfid.PCD_Init();
-
-    lcd.begin(16, 2);     // APRINDERE ECRAN
-    char message[25] = "INITIALIZARE";
-    print_message(message); // AFISARE MESAJ INITIAL
+    IrReceiver.begin(A3, ENABLE_LED_FEEDBACK);
 
     space = INITIAL_SPACE;
-    
+    digitalWrite(RLED, HIGH); // activare bec rosu
 }
 
 void loop() 
 {
-    car_access();
-    delay(300);
-    car_leaving();
+      if(IrReceiver.decode())
+      {
+        readIRValue = IrReceiver.decodedIRData.decodedRawData;
+        Serial.print(readIRValue);
+        if(readIRValue == ENABLE_MODE)
+        {
+            enable_admin();
+        }
+        IrReceiver.resume();
+      }
+      car_access();
+      delay(300);
+      car_leaving();
 }
